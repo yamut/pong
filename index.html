@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>pong</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+        }
+
+        body {
+            background-color: #282828;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+
+        #leftScore, #rightScore {
+            font-size: 90px;
+            color: #3f3;
+            font-family: 'VT323', monospace;
+        }
+    </style>
+</head>
+<body>
+<div id="leftScore">0</div>
+<canvas width="750" height="585"></canvas>
+<div id="rightScore">0</div>
+<script>
+    const config = {
+        wallColor: '#3f3',
+        paddleColor: '#6f6',
+        velocityStep: 1.05,
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+        const canv = document.querySelector('canvas');
+        const ctx = canv.getContext('2d');
+        const grid = 15;
+        const paddleX = grid * 5;
+        const paddleMaxY = canv.height - paddleX - grid;
+        const up = 'ArrowUp';
+        const down = 'ArrowDown';
+        let paddleSpeed = 10;
+        let ballSpeed = 5;
+        const leftPaddle = {
+            x: grid * 2,
+            y: canv.height / 2 - paddleX / 2,
+            width: grid,
+            height: paddleX,
+            vel: 0,
+        };
+        const rightPaddle = {
+            x: canv.width - grid * 3,
+            y: canv.height / 2 - paddleX / 2,
+            width: grid,
+            height: paddleX,
+            vel: 0,
+        };
+        const ball = {
+            x: canv.width / 2,
+            y: canv.height / 2,
+            height: grid,
+            width: grid,
+            resetting: false,
+            velX: ballSpeed,
+            velY: -ballSpeed,
+        }
+        const isColliding = (o1, o2) => {
+            return o1.x < o2.x + o2.width &&
+                o1.x + o1.width > o2.x &&
+                o1.y < o2.y + o2.height &&
+                o1.y + o1.height > o2.y;
+        };
+
+        const updateVelocity = () => {
+            if (Math.random() > .85) {
+                ball.velX = ball.velX * config.velocityStep;
+                ball.velY = ball.velY * config.velocityStep;
+            }
+        }
+
+        const handleCollisions = () => {
+            if (isColliding(ball, leftPaddle)) {
+                // swap sign
+                ball.velX *= -1;
+                ball.x = leftPaddle.x + leftPaddle.width;
+                updateVelocity();
+            } else if (isColliding(ball, rightPaddle)) {
+                // swap sign
+                ball.velX *= -1;
+                ball.x = rightPaddle.x - ball.width;
+                updateVelocity();
+            }
+        }
+
+        const drawFrame = () => {
+            // ball
+            ctx.fillRect(ball.x, ball.y, ball.width, ball.height);
+            // walls
+            ctx.fillStyle = config.wallColor;
+            ctx.fillRect(0, 0, canv.width, grid);
+            ctx.fillRect(0, canv.height - grid, canv.width, canv.height);
+            // midline
+            for (let i = grid; i < canv.height - grid; i += grid * 3) {
+                ctx.fillRect(canv.width / 2 - grid / 2, i, grid, grid);
+            }
+        }
+
+        const handleScore = () => {
+            if ((ball.x < 0 || ball.x > canv.width) && !ball.resetting) {
+                ball.resetting = true;
+                // increment score
+                let element = document.getElementById(ball.x < 0 ? 'rightScore' : 'leftScore');
+                element.textContent = (parseInt(element.textContent) + 1).toString();
+                // reset velocity
+                ball.velX = ballSpeed;
+                ball.velY = Math.random() <= .5 ? ballSpeed : -ballSpeed;
+                setTimeout(() => {
+                    ball.resetting = false;
+                    ball.x = canv.width / 2;
+                    ball.y = canv.height / 2;
+                }, 500);
+            }
+        }
+
+        const worstAiEver = () => {
+            if (Math.random() < .8) {
+                leftPaddle.y += Math.sign((ball.y - ball.height / 2) - (leftPaddle.y - leftPaddle.height / 2)) * Math.abs(ball.velY)
+            }
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            if (ball.resetting) {
+                // Don't continue to move the ball if the serve is dead
+                return;
+            }
+            ctx.clearRect(0, 0, canv.width, canv.height);
+            rightPaddle.y += rightPaddle.vel;
+            rightPaddle.y = rightPaddle.y < grid ? grid : (rightPaddle.y > paddleMaxY ? paddleMaxY : rightPaddle.y);
+            leftPaddle.y = leftPaddle.y < grid ? grid : (leftPaddle.y > paddleMaxY ? paddleMaxY : leftPaddle.y);
+            // paddles
+            ctx.fillStyle = config.paddleColor;
+            ctx.fillRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height);
+            ctx.fillRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height);
+            // move ball
+            ball.x += ball.velX;
+            ball.y += ball.velY;
+            // don't go through the wall please
+            if (ball.y < grid) {
+                ball.y = grid;
+                ball.velY *= -1;
+            } else if (ball.y + grid > canv.height - grid) {
+                ball.y = canv.height - grid * 2;
+                ball.velY *= -1;
+            }
+            // handle score
+            handleScore();
+            // handle collisions
+            handleCollisions();
+            worstAiEver();
+            drawFrame();
+        }
+
+        document.addEventListener('keydown', function (e) {
+            // start moving
+            rightPaddle.vel = up === e.key ? -paddleSpeed : (down === e.key ? paddleSpeed : 0);
+        });
+        document.addEventListener('keyup', function (e) {
+            // stop
+            if ([up, down].indexOf(e.key) !== -1) {
+                rightPaddle.vel = 0;
+            }
+        });
+        requestAnimationFrame(gameLoop);
+    })
+</script>
+</body>
+</html>
